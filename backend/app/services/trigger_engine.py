@@ -123,6 +123,7 @@ class TriggerEngine:
                                 "user_id": alert.user_id,
                                 "symbol": symbol,
                                 "direction": alert.direction,
+                                "threshold_percent": alert.threshold_percent,
                                 "reference_price": alert.reference_price,
                                 "target_price": alert.target_price,
                                 "trigger_price": current_price,

@@ -10,7 +10,7 @@ import { useMarketSocket } from "../../context/MarketSocketContext";
 export function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { marketStatus } = useMarketSocket();
+  const { marketStatus, triggeredNotifications } = useMarketSocket();
 
   const navLinks = [
     { name: "Dashboard", href: "/dashboard", icon: TrendingUp },
@@ -62,7 +62,7 @@ export function Navbar() {
           </nav>
         </div>
 
-        {/* Right Section: Market Status & User Profile */}
+        {/* Right Section: Market Status, Notification Bell & User Profile */}
         <div className="flex items-center gap-3">
           {/* Market Status Pill */}
           {marketStatus && (
@@ -81,6 +81,20 @@ export function Navbar() {
               </span>
             </div>
           )}
+
+          {/* Quick Notification Bell */}
+          <Link
+            href="/alerts/history"
+            className="relative flex items-center justify-center h-8 w-8 rounded-lg bg-surface border border-surface-border text-gray-300 hover:text-white hover:bg-surface-light transition-colors"
+            title="Alert Notifications & Trigger History"
+          >
+            <Bell className="h-4 w-4" />
+            {triggeredNotifications.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-extrabold text-white animate-pulse">
+                {triggeredNotifications.length}
+              </span>
+            )}
+          </Link>
 
           {/* User Auth Info */}
           {user ? (

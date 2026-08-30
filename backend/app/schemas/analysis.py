@@ -28,3 +28,30 @@ class IndicatorAnalysisResponse(BaseModel):
     candles: List[OHLCVBar]
     indicators: Dict[str, List]  # key: "SMA_20", "EMA_20", "RSI_14", "MACD", "BB_20_2", "VWAP", "ATR_14"
     disclaimer: str = "For informational and educational purposes only. Not financial or investment advice."
+
+
+class MarketNewsItem(BaseModel):
+    id: str
+    title: str
+    publisher: str
+    link: str
+    published_at: str
+    sentiment: str = "NEUTRAL"  # BULLISH | BEARISH | NEUTRAL
+    related_symbols: List[str] = []
+
+
+class MacroIndicatorItem(BaseModel):
+    name: str
+    symbol: str
+    value: float
+    change: float
+    change_percent: float
+    unit: str
+    updated_at: str
+
+
+class MacroSummaryResponse(BaseModel):
+    usdinr: MacroIndicatorItem
+    crude_oil: MacroIndicatorItem
+    gold: MacroIndicatorItem
+    updated_at: str

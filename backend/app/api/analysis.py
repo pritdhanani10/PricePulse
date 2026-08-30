@@ -1,14 +1,41 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
 from app.models.instrument import Instrument
-from app.schemas.analysis import IndicatorAnalysisResponse
+from app.schemas.analysis import IndicatorAnalysisResponse, MacroSummaryResponse, MarketNewsItem
 from app.services.analysis_service import analysis_service
 from app.services.market_data.factory import get_market_data_provider
+from app.services.market_intelligence import market_intelligence_service
 
-router = APIRouter(prefix="/analysis", tags=["Technical Analysis"])
+router = APIRouter(prefix="/analysis", tags=["Technical Analysis & Market Intelligence"])
+
+
+@router.get("/market/news", response_model=List[MarketNewsItem])
+async def get_market_news(
+    query: str = Query("Indian Stock Market NSE", description="Search topic or stock name"),
+    limit: int = Query(10, ge=1, le=30),
+):
+    """Retrieve real-time market financial news with automated sentiment classification."""
+    return await market_intelligence_service.get_market_news(query=query, limit=limit)
+
+
+@router.get("/market/macro", response_model=MacroSummaryResponse)
+async def get_macro_indicators():
+    """Retrieve live global macroeconomic leading indicators (USD/INR, Brent Crude Oil, Gold)."""
+    return await market_intelligence_service.get_macro_summary()
+
+
+@router.get("/{symbol}/news", response_model=List[MarketNewsItem])
+async def get_instrument_news(
+    symbol: str,
+    limit: int = Query(5, ge=1, le=20),
+):
+    """Retrieve news articles specifically related to a given stock symbol."""
+    sym = symbol.upper().strip()
+    return await market_intelligence_service.get_market_news(query=f"{sym} NSE stock", limit=limit)
 
 
 @router.get("/{symbol}", response_model=IndicatorAnalysisResponse)

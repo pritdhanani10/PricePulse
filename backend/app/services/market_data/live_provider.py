@@ -15,6 +15,9 @@ INDIAN_TICKER_MAP = {
     "NIFTY50": "^NSEI",
     "BANKNIFTY": "^NSEBANK",
     "FINNIFTY": "NIFTY_FIN_SERVICE.NS",
+    "TATAMOTORS": "TMCV.NS",  # Post-demerger official NSE ticker for Tata Motors
+    "TMCV": "TMCV.NS",
+    "TMPV": "TMPV.NS",
 }
 
 

@@ -49,8 +49,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       REDIS_ENABLED: "True"
       SECRET_KEY: dev_secret_key_change_in_production_market_platform_9988
-      MARKET_DATA_PROVIDER: mock
+      MARKET_DATA_PROVIDER: live
       TICK_INTERVAL_SECONDS: "1.0"
+      RESPECT_MARKET_HOURS: "True"
+      SIMULATE_WHEN_CLOSED: "False"
     ports:
       - "8000:8000"
 

@@ -5,6 +5,7 @@ import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, DollarSign, X } from "lu
 import { Instrument, MarketTick } from "../../types/stock";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useMarketSocket } from "../../context/MarketSocketContext";
 
 interface CreateAlertModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export function CreateAlertModal({
   onAlertCreated,
 }: CreateAlertModalProps) {
   const { user } = useAuth();
+  const { notifyAlertCreated, requestDesktopNotificationPermission } = useMarketSocket();
   const [referenceType, setReferenceType] = useState<"CURRENT_PRICE" | "MARKET_OPEN" | "CUSTOM">("CURRENT_PRICE");
   const [customPrice, setCustomPrice] = useState<string>("");
   const [upPercent, setUpPercent] = useState<string>("3.0");
@@ -100,11 +102,25 @@ export function CreateAlertModal({
         down_percentage: enableDown ? downVal : undefined,
       });
 
-      setSuccess(`✅ Successfully created alert trigger(s) for ${instrument.symbol}!`);
+      // Dispatch high priority created notification with full details & audio blip
+      notifyAlertCreated({
+        symbol: instrument.symbol,
+        name: instrument.name,
+        reference_price: baseRefPrice,
+        up_target: enableUp ? upTarget : undefined,
+        up_percent: enableUp ? upVal : undefined,
+        down_target: enableDown ? downTarget : undefined,
+        down_percent: enableDown ? downVal : undefined,
+      });
+
+      // Request native desktop permission if not already enabled
+      requestDesktopNotificationPermission().catch(() => {});
+
+      setSuccess(`✅ Successfully armed alert triggers for ${instrument.symbol}!`);
       setTimeout(() => {
         if (onAlertCreated) onAlertCreated();
         onClose();
-      }, 1200);
+      }, 900);
     } catch (err: any) {
       setError(err.message || "Failed to create alerts.");
     } finally {

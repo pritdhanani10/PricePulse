@@ -1,0 +1,15 @@
+{
+  "name": "PricePulse - Real-Time Indian Market Alerts & Technical Analysis",
+  "short_name": "PricePulse",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0E14",
+  "theme_color": "#06B6D4",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

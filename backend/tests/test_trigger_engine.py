@@ -118,3 +118,28 @@ async def test_trigger_engine_evaluation():
     )
     subsequent_res = await engine_svc.evaluate_tick(subsequent_tick)
     assert len(subsequent_res) == 0
+
+
+@pytest.mark.asyncio
+async def test_notification_service_integration():
+    from app.services.notification_service import notification_service
+
+    test_alert = Alert(
+        user_id="test_user_1",
+        instrument_id="inst_1",
+        alert_type="PERCENTAGE",
+        reference_type="CURRENT_PRICE",
+        reference_price=1000.0,
+        direction="UP",
+        threshold_percent=5.0,
+        target_price=1050.0,
+        status="ACTIVE",
+        triggered_at=datetime.now(timezone.utc),
+    )
+
+    success = await notification_service.send_alert_notification(
+        alert=test_alert,
+        current_price=1052.50,
+        channel="IN_APP",
+    )
+    assert success is True

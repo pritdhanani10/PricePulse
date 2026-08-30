@@ -47,11 +47,11 @@ class Settings(BaseSettings):
             return [str(i).strip() for i in v if str(i).strip()]
         return v
 
-    # Market Simulation
+    # Market Data & Trading Hours
     TICK_INTERVAL_SECONDS: float = 1.0
-    MARKET_DATA_PROVIDER: str = "mock"  # "mock" | "zerodha" | "angel" | "dhan"
-    SIMULATE_WHEN_CLOSED: bool = True  # If False, freezes prices when real market is closed
-    RESPECT_MARKET_HOURS: bool = False  # Set True to strictly only stream ticks during 09:15-15:30 IST Mon-Fri
+    MARKET_DATA_PROVIDER: str = "live"  # "live" | "mock" | "zerodha" | "angel" | "dhan"
+    SIMULATE_WHEN_CLOSED: bool = False  # If False, freezes prices when real market is closed
+    RESPECT_MARKET_HOURS: bool = True  # Strictly only stream ticks during 09:15-15:30 IST Mon-Fri (NSE holidays frozen)
 
     # Notification settings
     TELEGRAM_BOT_TOKEN: Optional[str] = None
