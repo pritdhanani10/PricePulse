@@ -1,11 +1,15 @@
 type TickCallback = (tick: import("../types/stock").MarketTick) => void;
 type AlertCallback = (alertData: any) => void;
+type SignalCallback = (signalData: any) => void;
+type NotificationCallback = (notifData: any) => void;
 
 class MarketWebSocketClient {
   private ws: WebSocket | null = null;
   private url: string;
   private tickListeners: Set<TickCallback> = new Set();
   private alertListeners: Set<AlertCallback> = new Set();
+  private signalListeners: Set<SignalCallback> = new Set();
+  private notificationListeners: Set<NotificationCallback> = new Set();
   private subscribedSymbols: Set<string> = new Set();
   private reconnectTimeout: any = null;
   private isExplicitDisconnect = false;
@@ -45,6 +49,10 @@ class MarketWebSocketClient {
             this.tickListeners.forEach((cb) => cb(payload.data));
           } else if (payload.type === "ALERT_TRIGGERED" && payload.data) {
             this.alertListeners.forEach((cb) => cb(payload.data));
+          } else if (payload.type === "STRATEGY_SIGNAL" && payload.data) {
+            this.signalListeners.forEach((cb) => cb(payload.data));
+          } else if (payload.type === "WATCHLIST_SIGNAL_NOTIFICATION" && payload.data) {
+            this.notificationListeners.forEach((cb) => cb(payload.data));
           }
         } catch (_) {}
       };
@@ -119,6 +127,16 @@ class MarketWebSocketClient {
   public onAlert(cb: AlertCallback) {
     this.alertListeners.add(cb);
     return () => this.alertListeners.delete(cb);
+  }
+
+  public onSignal(cb: SignalCallback) {
+    this.signalListeners.add(cb);
+    return () => this.signalListeners.delete(cb);
+  }
+
+  public onWatchlistNotification(cb: NotificationCallback) {
+    this.notificationListeners.add(cb);
+    return () => this.notificationListeners.delete(cb);
   }
 }
 

@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Boolean, Float, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, generate_uuid
 
@@ -50,6 +50,13 @@ class WatchlistItem(Base, TimestampMixin):
         index=True,
     )
 
+    # Automated 5-minute Strategy Monitoring fields
+    auto_monitor: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    strategy_code: Mapped[str] = mapped_column(String(50), default="CANDLE_3_PERCENT_5M", nullable=False)
+    buy_percent: Mapped[float] = mapped_column(Float, default=3.0, nullable=False)
+    sell_percent: Mapped[float] = mapped_column(Float, default=3.0, nullable=False)
+
     # Relationships
     watchlist = relationship("Watchlist", back_populates="items")
     instrument = relationship("Instrument", back_populates="watchlist_items")
+

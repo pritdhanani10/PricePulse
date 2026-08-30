@@ -27,3 +27,4 @@ class User(Base, TimestampMixin):
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     alert_history = relationship("AlertHistory", back_populates="user", cascade="all, delete-orphan")
     watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("UserNotification", back_populates="user", cascade="all, delete-orphan")

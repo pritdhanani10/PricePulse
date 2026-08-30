@@ -56,9 +56,21 @@ OFFICIAL_INDEXES = {
 
 
 async def init_db():
-    """Create tables and seed initial Indian Market instruments, indexes, and strategies if not present."""
+    """Create tables, run column migrations, and seed initial Indian Market instruments, indexes, and strategies if not present."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe column migrations for existing databases
+        cols_to_add = [
+            ("auto_monitor", "BOOLEAN NOT NULL DEFAULT TRUE"),
+            ("strategy_code", "VARCHAR(50) NOT NULL DEFAULT 'CANDLE_3_PERCENT_5M'"),
+            ("buy_percent", "FLOAT NOT NULL DEFAULT 3.0"),
+            ("sell_percent", "FLOAT NOT NULL DEFAULT 3.0"),
+        ]
+        for col_name, col_def in cols_to_add:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE watchlist_items ADD COLUMN {col_name} {col_def}")
+            except Exception:
+                pass
     
     async with AsyncSessionLocal() as session:
         # 1. Seed Instruments

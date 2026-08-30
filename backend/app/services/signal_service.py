@@ -8,7 +8,10 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import AsyncSessionLocal
 from app.core.redis import redis_manager
+from app.models.instrument import Instrument
 from app.models.strategy import Strategy, StrategyTrigger, StrategySignal, TriggerStatus, SignalType
+from app.models.watchlist import Watchlist, WatchlistItem
+from app.services.notification_service import notification_service
 from app.strategies.models import EvaluatedSignal
 from app.websocket.manager import ws_manager
 
@@ -24,8 +27,10 @@ class SignalService:
         trigger: StrategyTrigger,
     ) -> Optional[StrategySignal]:
         """
-        Atomically records a generated StrategySignal and triggers real-time WebSocket broadcast.
+        Atomically records a generated StrategySignal, dispatches real-time WebSocket broadcasts,
+        and generates persistent notifications for all users monitoring this stock in their Watchlists.
         """
+        symbol = signal_data.symbol.upper().strip()
         async with AsyncSessionLocal() as session:
             try:
                 # 1. Fetch parent strategy
@@ -44,7 +49,7 @@ class SignalService:
                 new_signal = StrategySignal(
                     strategy_id=strat_id,
                     trigger_id=trigger.id,
-                    symbol=signal_data.symbol,
+                    symbol=symbol,
                     index_id=trigger.index_id,
                     signal_type=signal_data.signal_type,
                     trigger_price=signal_data.trigger_price,
@@ -85,6 +90,32 @@ class SignalService:
                 # Publish via Redis / In-memory WebSockets
                 asyncio.create_task(redis_manager.publish("market:strategy_signals", event_payload))
                 asyncio.create_task(ws_manager.broadcast_event(event_payload))
+
+                # 5. Automatically create notifications for all users auto-monitoring this stock in their Watchlist
+                wl_stmt = (
+                    select(WatchlistItem)
+                    .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
+                    .join(Instrument, Instrument.id == WatchlistItem.instrument_id)
+                    .options(selectinload(WatchlistItem.watchlist))
+                    .where(
+                        and_(
+                            Instrument.symbol == symbol,
+                            WatchlistItem.auto_monitor == True,
+                        )
+                    )
+                )
+                wl_items = (await session.execute(wl_stmt)).scalars().all()
+                for item in wl_items:
+                    if item.watchlist and item.watchlist.user_id:
+                        asyncio.create_task(
+                            notification_service.send_watchlist_signal_notification(
+                                user_id=item.watchlist.user_id,
+                                symbol=symbol,
+                                signal=new_signal,
+                                watchlist_id=item.watchlist_id,
+                                instrument_id=item.instrument_id,
+                            )
+                        )
 
                 return new_signal
             except Exception as e:

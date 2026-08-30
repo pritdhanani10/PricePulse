@@ -10,7 +10,8 @@ import { useMarketSocket } from "../../context/MarketSocketContext";
 export function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { marketStatus, triggeredNotifications } = useMarketSocket();
+  const { marketStatus, triggeredNotifications, unreadNotificationCount } = useMarketSocket();
+  const totalNotifs = triggeredNotifications.length + (unreadNotificationCount || 0);
 
   const navLinks = [
     { name: "Dashboard", href: "/dashboard", icon: TrendingUp },
@@ -91,9 +92,9 @@ export function Navbar() {
             title="Alert Notifications & Trigger History"
           >
             <Bell className="h-4 w-4" />
-            {triggeredNotifications.length > 0 && (
+            {totalNotifs > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-extrabold text-white animate-pulse">
-                {triggeredNotifications.length}
+                {totalNotifs}
               </span>
             )}
           </Link>

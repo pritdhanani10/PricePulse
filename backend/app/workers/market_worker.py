@@ -21,6 +21,19 @@ class MarketWorker:
         self._is_running = True
         provider = get_market_data_provider()
         await provider.connect()
+        # Prime subscriptions for all active instruments
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.models.instrument import Instrument
+            from sqlalchemy import select
+            async with AsyncSessionLocal() as session:
+                stmt = select(Instrument.symbol).where(Instrument.is_active == True)
+                symbols = (await session.execute(stmt)).scalars().all()
+                if symbols:
+                    await provider.subscribe(list(symbols))
+        except Exception as e:
+            logger.warning(f"Could not prime provider subscriptions: {e}")
+
         self._task = asyncio.create_task(self._run_loop())
         logger.info("🚀 Market Worker started successfully.")
 

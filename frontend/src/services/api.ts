@@ -155,11 +155,51 @@ class ApiClient {
     });
   }
 
-  async addWatchlistItem(watchlistId: string, instrumentId: string) {
+  async deleteWatchlist(watchlistId: string) {
+    return this.request<void>(`/watchlists/${watchlistId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async addWatchlistItem(
+    watchlistId: string,
+    instrumentId: string,
+    options?: {
+      auto_monitor?: boolean;
+      strategy_code?: string;
+      buy_percent?: number;
+      sell_percent?: number;
+    }
+  ) {
     return this.request<import("../types/auth").Watchlist>(`/watchlists/${watchlistId}/items`, {
       method: "POST",
-      body: JSON.stringify({ instrument_id: instrumentId }),
+      body: JSON.stringify({
+        instrument_id: instrumentId,
+        auto_monitor: options?.auto_monitor ?? true,
+        strategy_code: options?.strategy_code ?? "CANDLE_3_PERCENT_5M",
+        buy_percent: options?.buy_percent ?? 3.0,
+        sell_percent: options?.sell_percent ?? 3.0,
+      }),
     });
+  }
+
+  async updateWatchlistItem(
+    watchlistId: string,
+    itemId: string,
+    payload: {
+      auto_monitor?: boolean;
+      strategy_code?: string;
+      buy_percent?: number;
+      sell_percent?: number;
+    }
+  ) {
+    return this.request<import("../types/auth").Watchlist>(
+      `/watchlists/${watchlistId}/items/${itemId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    );
   }
 
   async removeWatchlistItem(watchlistId: string, instrumentId: string) {
@@ -167,6 +207,37 @@ class ApiClient {
       `/watchlists/${watchlistId}/items/${instrumentId}`,
       {
         method: "DELETE",
+      }
+    );
+  }
+
+  async getWatchlistAutoMonitorSummary() {
+    return this.request<import("../types/stock").AutoMonitorItemSummary[]>("/watchlists/auto-monitor/summary");
+  }
+
+  async getWatchlistNotifications(unreadOnly?: boolean, limit: number = 50) {
+    const params = new URLSearchParams();
+    if (unreadOnly) params.append("unread_only", "true");
+    params.append("limit", limit.toString());
+    return this.request<import("../types/auth").NotificationListResponse>(
+      `/watchlists/notifications?${params.toString()}`
+    );
+  }
+
+  async markNotificationRead(notificationId: string) {
+    return this.request<{ status: string; message: string }>(
+      `/watchlists/notifications/${notificationId}/read`,
+      {
+        method: "PUT",
+      }
+    );
+  }
+
+  async markAllNotificationsRead() {
+    return this.request<{ status: string; count: number; message: string }>(
+      "/watchlists/notifications/read-all",
+      {
+        method: "POST",
       }
     );
   }

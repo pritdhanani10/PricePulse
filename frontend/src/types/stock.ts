@@ -188,3 +188,24 @@ export interface BacktestResult {
   disclaimer: string;
 }
 
+export interface AutoMonitorItemSummary {
+  watchlist_id: string;
+  watchlist_name: string;
+  item_id: string;
+  instrument_id: string;
+  symbol: string;
+  name: string;
+  instrument_type: string;
+  auto_monitor: boolean;
+  current_price: number;
+  buy_trigger_price?: number | null;
+  buy_percent: number;
+  buy_distance_percent?: number | null;
+  sell_trigger_price?: number | null;
+  sell_percent: number;
+  sell_distance_percent?: number | null;
+  reference_candle_time?: string | null;
+  last_signal_type?: string | null;
+  last_signal_time?: string | null;
+}
+

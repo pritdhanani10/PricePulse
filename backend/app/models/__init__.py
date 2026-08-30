@@ -6,6 +6,7 @@ from app.models.watchlist import Watchlist, WatchlistItem
 from app.models.index import Index, IndexConstituent, IndexCategory
 from app.models.candle import Candle5m
 from app.models.strategy import Strategy, StrategyTrigger, StrategySignal, TriggerStatus, SignalType
+from app.models.notification import UserNotification
 
 __all__ = [
     "Base",
@@ -24,5 +25,6 @@ __all__ = [
     "StrategySignal",
     "TriggerStatus",
     "SignalType",
+    "UserNotification",
 ]
 

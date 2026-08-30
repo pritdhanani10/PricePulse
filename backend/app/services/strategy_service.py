@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 import logging
 from typing import Dict, List, Optional
-from sqlalchemy import select, and_, or_, update
+from sqlalchemy import select, and_, or_, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -281,6 +281,112 @@ class StrategyService:
                 }
                 for t in triggers
             ]
+
+    async def ensure_symbol_monitored(self, symbol: str) -> None:
+        """Ensure market provider is streaming ticks and initial 5m triggers exist for symbol."""
+        sym = symbol.upper().strip()
+        from app.services.market_data.factory import get_market_data_provider
+        provider = get_market_data_provider()
+        await provider.subscribe([sym])
+
+        # Check if active triggers already exist
+        async with AsyncSessionLocal() as session:
+            stmt = select(StrategyTrigger).where(
+                and_(
+                    StrategyTrigger.symbol == sym,
+                    StrategyTrigger.status == TriggerStatus.ACTIVE,
+                )
+            )
+            existing = (await session.execute(stmt)).scalars().all()
+            if not existing:
+                from app.services.candle_service import candle_service
+                latest_candle = await candle_service.get_latest_completed_candle(sym)
+                if latest_candle:
+                    await self.handle_candle_completed(latest_candle)
+
+    async def get_watchlist_auto_monitor_summary(self, user_id: str) -> List[dict]:
+        """
+        Calculates live distances to BUY and SELL triggers for all auto-monitored stocks in user's watchlists.
+        """
+        from app.models.watchlist import Watchlist, WatchlistItem
+        from app.services.market_data.factory import get_market_data_provider
+        provider = get_market_data_provider()
+
+        async with AsyncSessionLocal() as session:
+            stmt = (
+                select(WatchlistItem)
+                .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
+                .join(Instrument, Instrument.id == WatchlistItem.instrument_id)
+                .options(
+                    selectinload(WatchlistItem.watchlist),
+                    selectinload(WatchlistItem.instrument),
+                )
+                .where(
+                    and_(
+                        Watchlist.user_id == user_id,
+                        WatchlistItem.auto_monitor == True,
+                    )
+                )
+            )
+            items = (await session.execute(stmt)).scalars().all()
+
+            results = []
+            for item in items:
+                sym = item.instrument.symbol.upper()
+                quote = await provider.get_quote(sym)
+                current_price = quote.price if quote else item.instrument.base_price
+
+                # Fetch active triggers for this symbol
+                trig_stmt = select(StrategyTrigger).where(
+                    and_(
+                        StrategyTrigger.symbol == sym,
+                        StrategyTrigger.status == TriggerStatus.ACTIVE,
+                    )
+                )
+                active_trigs = (await session.execute(trig_stmt)).scalars().all()
+
+                buy_trig = next((t for t in active_trigs if t.signal_type == "BUY"), None)
+                sell_trig = next((t for t in active_trigs if t.signal_type == "SELL"), None)
+
+                buy_dist = None
+                if buy_trig and current_price > 0:
+                    buy_dist = round(((buy_trig.trigger_price - current_price) / current_price) * 100, 2)
+
+                sell_dist = None
+                if sell_trig and current_price > 0:
+                    sell_dist = round(((current_price - sell_trig.trigger_price) / current_price) * 100, 2)
+
+                # Fetch latest signal
+                sig_stmt = (
+                    select(StrategySignal)
+                    .where(StrategySignal.symbol == sym)
+                    .order_by(desc(StrategySignal.signal_time))
+                    .limit(1)
+                )
+                last_sig = (await session.execute(sig_stmt)).scalar_one_or_none()
+
+                results.append({
+                    "watchlist_id": item.watchlist_id,
+                    "watchlist_name": item.watchlist.name if item.watchlist else "Watchlist",
+                    "item_id": item.id,
+                    "instrument_id": item.instrument_id,
+                    "symbol": sym,
+                    "name": item.instrument.name,
+                    "instrument_type": item.instrument.instrument_type,
+                    "auto_monitor": item.auto_monitor,
+                    "current_price": current_price,
+                    "buy_trigger_price": buy_trig.trigger_price if buy_trig else None,
+                    "buy_percent": item.buy_percent,
+                    "buy_distance_percent": buy_dist,
+                    "sell_trigger_price": sell_trig.trigger_price if sell_trig else None,
+                    "sell_percent": item.sell_percent,
+                    "sell_distance_percent": sell_dist,
+                    "reference_candle_time": buy_trig.reference_candle_time.isoformat() if buy_trig and buy_trig.reference_candle_time else None,
+                    "last_signal_type": last_sig.signal_type if last_sig else None,
+                    "last_signal_time": last_sig.signal_time.isoformat() if last_sig and last_sig.signal_time else None,
+                })
+
+            return results
 
 
 strategy_service = StrategyService()

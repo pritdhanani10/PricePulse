@@ -2,8 +2,20 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Bell, CheckCircle, ExternalLink, LineChart, Volume2, X } from "lucide-react";
+import { 
+  ArrowDownRight, 
+  ArrowUpRight, 
+  Bell, 
+  Bookmark, 
+  CheckCircle, 
+  ExternalLink, 
+  LineChart, 
+  Volume2, 
+  X, 
+  Zap 
+} from "lucide-react";
 import { MarketStatus, MarketTick } from "../types/stock";
+import { UserNotification } from "../types/auth";
 import { marketSocket } from "../services/websocket";
 import { useAuth } from "./AuthContext";
 import { api } from "../services/api";
@@ -19,6 +31,18 @@ export interface TriggerNotification {
   target_price: number;
   trigger_price: number;
   triggered_at: string;
+}
+
+export interface WatchlistSignalToast {
+  id: string;
+  symbol: string;
+  signal_type: "BUY" | "SELL";
+  title: string;
+  message: string;
+  trigger_price?: number;
+  market_price?: number;
+  reference_price?: number;
+  created_at: string;
 }
 
 export interface CreatedAlertNotification {
@@ -37,8 +61,15 @@ interface MarketSocketContextType {
   ticks: Record<string, MarketTick>;
   marketStatus: MarketStatus | null;
   triggeredNotifications: TriggerNotification[];
+  watchlistToasts: WatchlistSignalToast[];
   createdNotifications: CreatedAlertNotification[];
+  unreadNotificationCount: number;
+  userNotifications: UserNotification[];
+  fetchUserNotifications: () => void;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
   dismissTriggerNotification: (id: string) => void;
+  dismissWatchlistToast: (id: string) => void;
   dismissCreatedNotification: (id: string) => void;
   notifyAlertCreated: (alertData: Omit<CreatedAlertNotification, "id" | "created_at">) => void;
   subscribeSymbols: (symbols: string[]) => void;
@@ -49,14 +80,17 @@ interface MarketSocketContextType {
 const MarketSocketContext = createContext<MarketSocketContextType | undefined>(undefined);
 
 export function MarketSocketProvider({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [ticks, setTicks] = useState<Record<string, MarketTick>>({});
   const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
   const [triggeredNotifications, setTriggeredNotifications] = useState<TriggerNotification[]>([]);
+  const [watchlistToasts, setWatchlistToasts] = useState<WatchlistSignalToast[]>([]);
   const [createdNotifications, setCreatedNotifications] = useState<CreatedAlertNotification[]>([]);
+  const [userNotifications, setUserNotifications] = useState<UserNotification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0);
   const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(false);
 
-  // Request browser notification permissions if available
+  // Request browser desktop notification permissions
   const requestDesktopNotificationPermission = async (): Promise<boolean> => {
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "granted") {
@@ -69,6 +103,35 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       return granted;
     }
     return false;
+  };
+
+  const fetchUserNotifications = () => {
+    if (!user) return;
+    api
+      .getWatchlistNotifications(false, 30)
+      .then((res) => {
+        setUserNotifications(res.notifications);
+        setUnreadNotificationCount(res.unread_count);
+      })
+      .catch(() => {});
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await api.markNotificationRead(id);
+      setUserNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+      setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
+    } catch (_) {}
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setUserNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadNotificationCount(0);
+    } catch (_) {}
   };
 
   // 1. Initial snapshot fetch
@@ -94,6 +157,12 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      fetchUserNotifications();
+    }
+  }, [user]);
+
   // 2. WebSocket listener setup
   useEffect(() => {
     marketSocket.connect(token);
@@ -118,18 +187,14 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
         triggered_at: alertData.triggered_at || new Date().toISOString(),
       };
 
-      // 1. Add to in-app high priority toast feed
       setTriggeredNotifications((prev) => [notif, ...prev]);
 
-      // Auto-dismiss notification after 15 seconds
       setTimeout(() => {
         setTriggeredNotifications((prev) => prev.filter((n) => n.id !== notif.id));
       }, 15000);
 
-      // 2. Play high-priority crystal-clear audio chime
       soundService.playAlertTriggerSound();
 
-      // 3. Trigger Native Desktop Notification
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
         try {
           const dirEmoji = alertData.direction === "UP" ? "🚀" : "🔻";
@@ -144,11 +209,52 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       }
     });
 
+    const unsubscribeWatchlistNotif = marketSocket.onWatchlistNotification((notifData) => {
+      const toast: WatchlistSignalToast = {
+        id: notifData.id || Math.random().toString(36).substring(2, 9),
+        symbol: notifData.symbol,
+        signal_type: notifData.signal_type || "BUY",
+        title: notifData.title,
+        message: notifData.message,
+        trigger_price: notifData.trigger_price,
+        market_price: notifData.market_price,
+        reference_price: notifData.reference_price,
+        created_at: notifData.created_at || new Date().toISOString(),
+      };
+
+      setWatchlistToasts((prev) => [toast, ...prev]);
+      setUnreadNotificationCount((prev) => prev + 1);
+
+      // Refresh full ledger
+      fetchUserNotifications();
+
+      // Play chime
+      soundService.playAlertTriggerSound();
+
+      // Auto-dismiss after 15 seconds
+      setTimeout(() => {
+        setWatchlistToasts((prev) => prev.filter((t) => t.id !== toast.id));
+      }, 15000);
+
+      // Desktop notification
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          const emoji = toast.signal_type === "BUY" ? "🟢" : "🔴";
+          new Notification(`${emoji} Watchlist ${toast.signal_type} Signal: ${toast.symbol}`, {
+            body: `Target: ₹${toast.trigger_price?.toLocaleString("en-IN") || ""} | Executed: ₹${toast.market_price?.toLocaleString("en-IN") || ""}`,
+            icon: "/favicon.ico",
+            requireInteraction: true,
+          });
+        } catch (_) {}
+      }
+    });
+
     return () => {
       unsubscribeTick();
       unsubscribeAlert();
+      unsubscribeWatchlistNotif();
     };
-  }, [token]);
+  }, [token, user]);
 
   const notifyAlertCreated = (data: Omit<CreatedAlertNotification, "id" | "created_at">) => {
     const createdNotif: CreatedAlertNotification = {
@@ -159,7 +265,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
     setCreatedNotifications((prev) => [createdNotif, ...prev]);
     soundService.playAlertCreatedSound();
 
-    // Auto dismiss creation toast after 7 seconds
     setTimeout(() => {
       dismissCreatedNotification(createdNotif.id);
     }, 7000);
@@ -167,6 +272,10 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
 
   const dismissTriggerNotification = (id: string) => {
     setTriggeredNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const dismissWatchlistToast = (id: string) => {
+    setWatchlistToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   const dismissCreatedNotification = (id: string) => {
@@ -187,8 +296,15 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
         ticks,
         marketStatus,
         triggeredNotifications,
+        watchlistToasts,
         createdNotifications,
+        unreadNotificationCount,
+        userNotifications,
+        fetchUserNotifications,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
         dismissTriggerNotification,
+        dismissWatchlistToast,
         dismissCreatedNotification,
         notifyAlertCreated,
         subscribeSymbols,
@@ -202,8 +318,114 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       {/* HIGH PRIORITY TOAST OVERLAY (Bottom Right Global Notifications)           */}
       {/* ========================================================================= */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none px-3">
-        {/* 1. TRIGGERED ALERTS NOTIFICATIONS (HIGH PRIORITY) */}
-        {triggeredNotifications.slice(0, 3).map((n) => {
+        {/* 1. WATCHLIST AUTO-MONITOR SIGNAL TOASTS */}
+        {watchlistToasts.slice(0, 3).map((w) => {
+          const isBuy = w.signal_type === "BUY";
+          const timeStr = new Date(w.created_at).toLocaleTimeString();
+
+          return (
+            <div
+              key={w.id}
+              className={`pointer-events-auto relative overflow-hidden rounded-2xl border p-4 shadow-2xl backdrop-blur-xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${
+                isBuy
+                  ? "border-emerald-500/80 bg-gradient-to-br from-emerald-950/95 via-gray-900/95 to-surface text-emerald-100 shadow-emerald-900/50"
+                  : "border-rose-500/80 bg-gradient-to-br from-rose-950/95 via-gray-900/95 to-surface text-rose-100 shadow-rose-900/50"
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                        isBuy ? "bg-emerald-400" : "bg-rose-400"
+                      }`}
+                    />
+                    <span
+                      className={`relative inline-flex rounded-full h-3 w-3 ${
+                        isBuy ? "bg-emerald-500" : "bg-rose-500"
+                      }`}
+                    />
+                  </span>
+                  <span className="text-[11px] font-black tracking-wider uppercase text-white flex items-center gap-1.5">
+                    <Zap className="h-3.5 w-3.5 text-cyan-400" />
+                    WATCHLIST AUTO-MONITOR SIGNAL
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-300 font-mono">{timeStr}</span>
+                  <button
+                    onClick={() => dismissWatchlistToast(w.id)}
+                    title="Dismiss"
+                    className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-black text-white font-mono">{w.symbol}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-black font-mono border ${
+                        isBuy
+                          ? "bg-emerald-900 text-emerald-300 border-emerald-700"
+                          : "bg-rose-900 text-rose-300 border-rose-700"
+                      }`}
+                    >
+                      {w.signal_type} SIGNAL (5m 3%)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 grid grid-cols-2 gap-2 rounded-xl bg-black/40 p-2.5 text-xs font-mono border border-white/5">
+                  {w.trigger_price && (
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase">Trigger Target</span>
+                      <span className="text-sm font-bold text-gray-200">
+                        ₹{w.trigger_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  {w.market_price && (
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase">Executed Live Price</span>
+                      <span className="text-sm font-extrabold text-white underline decoration-cyan-400">
+                        ₹{w.market_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/10">
+                <Link
+                  href={`/analysis?symbol=${w.symbol}`}
+                  onClick={() => dismissWatchlistToast(w.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/40 text-xs font-bold transition-all"
+                >
+                  <LineChart className="h-3.5 w-3.5" />
+                  View 5m Chart
+                </Link>
+                <Link
+                  href="/watchlist"
+                  onClick={() => dismissWatchlistToast(w.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-surface-light/60 hover:bg-surface-light text-gray-200 border border-surface-border text-xs font-semibold transition-all"
+                >
+                  <Bookmark className="h-3.5 w-3.5 text-cyan-400" />
+                  Watchlist
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* 2. TRIGGERED PRICE ALERTS NOTIFICATIONS */}
+        {triggeredNotifications.slice(0, 2).map((n) => {
           const isUp = n.direction === "UP";
           const refPrice = n.reference_price || n.target_price;
           const diff = n.trigger_price - refPrice;
@@ -219,7 +441,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                   : "border-red-500/80 bg-gradient-to-br from-red-950/95 via-gray-900/95 to-surface text-red-100 shadow-red-900/50"
               }`}
             >
-              {/* Pulsing Priority Header */}
               <div className="flex items-center justify-between pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <span className="relative flex h-3 w-3">
@@ -235,14 +456,14 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                     />
                   </span>
                   <span className="text-[11px] font-black tracking-wider uppercase text-white">
-                    🚨 HIGH PRIORITY: ALERT TRIGGERED
+                    🚨 PRICE ALERT TRIGGERED
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-gray-300 font-mono">{timeStr}</span>
                   <button
                     onClick={() => dismissTriggerNotification(n.id)}
-                    title="Dismiss Notification"
+                    title="Dismiss"
                     className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
                   >
                     <X className="h-4 w-4" />
@@ -250,7 +471,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                 </div>
               </div>
 
-              {/* Body Details */}
               <div className="mt-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -270,7 +490,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                   </div>
                 </div>
 
-                {/* Price Grid */}
                 <div className="mt-2.5 grid grid-cols-2 gap-2 rounded-xl bg-black/40 p-2.5 text-xs font-mono border border-white/5">
                   <div>
                     <span className="text-[10px] text-gray-400 block uppercase">Target Price</span>
@@ -287,7 +506,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/10">
                 <Link
                   href={`/analysis?symbol=${n.symbol}`}
@@ -310,8 +528,8 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
           );
         })}
 
-        {/* 2. CREATED ALERT CONFIRMATION TOAST */}
-        {createdNotifications.slice(0, 2).map((c) => (
+        {/* 3. CREATED ALERT CONFIRMATION TOAST */}
+        {createdNotifications.slice(0, 1).map((c) => (
           <div
             key={c.id}
             className="pointer-events-auto relative overflow-hidden rounded-2xl border border-cyan-500/60 bg-gradient-to-br from-cyan-950/95 via-gray-900/95 to-surface p-4 text-cyan-100 shadow-2xl shadow-cyan-950/60 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4"
@@ -335,25 +553,6 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
                 <span className="text-[11px] text-gray-300 font-mono">
                   Ref: ₹{c.reference_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </span>
-              </div>
-
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-mono">
-                {c.up_target && (
-                  <div className="p-2 rounded-lg bg-emerald-950/60 border border-emerald-800/40">
-                    <span className="text-[10px] text-emerald-400 block font-bold">UP (+{c.up_percent}%)</span>
-                    <span className="text-xs font-extrabold text-white">
-                      ₹{c.up_target.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-                {c.down_target && (
-                  <div className="p-2 rounded-lg bg-red-950/60 border border-red-800/40">
-                    <span className="text-[10px] text-red-400 block font-bold">DOWN (-{c.down_percent}%)</span>
-                    <span className="text-xs font-extrabold text-white">
-                      ₹{c.down_target.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
