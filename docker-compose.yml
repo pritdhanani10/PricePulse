@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulse_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: market_user
+      POSTGRES_PASSWORD: market_password
+      POSTGRES_DB: stock_market_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U market_user -d stock_market_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pulse_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pulse_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://market_user:market_password@postgres:5432/stock_market_db
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: "True"
+      SECRET_KEY: dev_secret_key_change_in_production_market_platform_9988
+      MARKET_DATA_PROVIDER: mock
+      TICK_INTERVAL_SECONDS: "1.0"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pulse_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws/market
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  redisdata:
