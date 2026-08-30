@@ -56,7 +56,22 @@ class MarketWorker:
                 except Exception as e:
                     logger.error(f"Error during trigger engine evaluation for {tick.symbol}: {e}", exc_info=True)
 
-                # 3. Broadcast live tick to connected WebSocket clients
+                # 3. Update 5-minute candle aggregation and handle candle completion
+                try:
+                    from app.services.candle_service import candle_service
+                    from app.services.strategy_service import strategy_service
+
+                    finalized_candle = await candle_service.process_tick(tick)
+                    if finalized_candle:
+                        # Automatically create new strategy triggers for the completed candle
+                        await strategy_service.handle_candle_completed(finalized_candle)
+
+                    # Evaluate live tick against ACTIVE strategy triggers
+                    await strategy_service.evaluate_tick_triggers(tick)
+                except Exception as e:
+                    logger.error(f"Error in strategy/candle processing for {tick.symbol}: {e}", exc_info=True)
+
+                # 4. Broadcast live tick to connected WebSocket clients
                 try:
                     await ws_manager.broadcast_tick(tick)
                 except Exception as e:

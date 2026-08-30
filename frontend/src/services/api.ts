@@ -177,6 +177,78 @@ class ApiClient {
       `/analysis/${symbol}?timeframe=${timeframe}&limit=${limit}`
     );
   }
+
+  // Index Explorer
+  async getIndexes() {
+    return this.request<import("../types/stock").IndexInfo[]>("/indexes");
+  }
+
+  async getIndexByCategory(category: string) {
+    return this.request<import("../types/stock").IndexCategoryResponse>(`/indexes/category/${category}`);
+  }
+
+  // 5-Minute Candles & Strategy
+  async get5mCandles(symbol: string, limit: number = 60) {
+    return this.request<import("../types/stock").CandleResponse>(`/strategy/candles/${symbol}?limit=${limit}`);
+  }
+
+  async getStrategyConfig() {
+    return this.request<{
+      strategy_name: string;
+      strategy_code: string;
+      description: string;
+      config: import("../types/stock").StrategyConfig;
+    }>("/strategy/config");
+  }
+
+  async updateStrategyConfig(config: Partial<import("../types/stock").StrategyConfig>) {
+    return this.request<{
+      status: string;
+      message: string;
+      config: import("../types/stock").StrategyConfig;
+    }>("/strategy/config", {
+      method: "POST",
+      body: JSON.stringify(config),
+    });
+  }
+
+  async getActiveTriggers(symbol?: string) {
+    const query = symbol ? `?symbol=${symbol}` : "";
+    return this.request<import("../types/stock").StrategyTrigger[]>(`/strategy/triggers/active${query}`);
+  }
+
+  async getStrategySignals(params?: {
+    symbol?: string;
+    signal_type?: string;
+    index_id?: string;
+    limit?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.symbol) searchParams.append("symbol", params.symbol);
+    if (params?.signal_type) searchParams.append("signal_type", params.signal_type);
+    if (params?.index_id) searchParams.append("index_id", params.index_id);
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : "";
+    return this.request<import("../types/stock").StrategySignal[]>(`/strategy/signals${qs}`);
+  }
+
+  async runBacktest(data: {
+    symbol: string;
+    timeframe?: string;
+    buy_percent?: number;
+    sell_percent?: number;
+    buy_from?: string;
+    sell_from?: string;
+    candle_limit?: number;
+    lifecycle_policy?: string;
+  }) {
+    return this.request<import("../types/stock").BacktestResult>("/strategy/backtest", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const api = new ApiClient();
+

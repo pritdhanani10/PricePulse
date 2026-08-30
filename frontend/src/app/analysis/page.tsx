@@ -2,22 +2,41 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownRight, ArrowUpRight, BarChart2, Layers, LineChart, RefreshCw, Sliders } from "lucide-react";
-import { Instrument, TechnicalAnalysisData } from "../../types/stock";
+import { 
+  ArrowDownRight, 
+  ArrowUpRight, 
+  BarChart2, 
+  Compass, 
+  History, 
+  Layers, 
+  LineChart, 
+  Play, 
+  RefreshCw, 
+  Sliders, 
+  Sparkles, 
+  TrendingUp, 
+  Zap 
+} from "lucide-react";
+import { Candle5m, Instrument, TechnicalAnalysisData } from "../../types/stock";
 import { api } from "../../services/api";
 import { useMarketSocket } from "../../context/MarketSocketContext";
 import { InteractiveChart } from "../../components/analysis/InteractiveChart";
+import { StrategyTriggerCards } from "../../components/strategy/StrategyTriggerCards";
+import { StrategySignalHistory } from "../../components/strategy/StrategySignalHistory";
+import { BacktestPanel } from "../../components/strategy/BacktestPanel";
 
 function TechnicalAnalysisContent() {
   const searchParams = useSearchParams();
-  const initialSymbol = searchParams.get("symbol") || "NIFTY50";
+  const initialSymbol = searchParams.get("symbol") || "TEJASNET";
 
   const { ticks } = useMarketSocket();
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [symbol, setSymbol] = useState<string>(initialSymbol);
-  const [timeframe, setTimeframe] = useState<string>("1D");
+  const [timeframe, setTimeframe] = useState<string>("5m");
   const [analysisData, setAnalysisData] = useState<TechnicalAnalysisData | null>(null);
+  const [latestCandle5m, setLatestCandle5m] = useState<Candle5m | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<"strategy" | "backtest" | "signals">("strategy");
 
   // Indicator Toggles
   const [indicators, setIndicators] = useState({
@@ -35,17 +54,23 @@ function TechnicalAnalysisContent() {
     api.getInstruments().then((insts) => setInstruments(insts));
   }, []);
 
-  const fetchAnalysis = () => {
+  const fetchAnalysisAndCandles = () => {
     setLoading(true);
-    api
-      .getTechnicalAnalysis(symbol, timeframe, 120)
-      .then((data) => setAnalysisData(data))
-      .catch((err) => console.error("Failed to load analysis data", err))
+    Promise.all([
+      api.getTechnicalAnalysis(symbol, timeframe, 120).catch(() => null),
+      api.get5mCandles(symbol, 60).catch(() => null),
+    ])
+      .then(([ta, candleRes]) => {
+        if (ta) setAnalysisData(ta);
+        if (candleRes && candleRes.latest_completed_candle) {
+          setLatestCandle5m(candleRes.latest_completed_candle);
+        }
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    fetchAnalysis();
+    fetchAnalysisAndCandles();
   }, [symbol, timeframe]);
 
   const toggleIndicator = (key: keyof typeof indicators) => {
@@ -53,19 +78,25 @@ function TechnicalAnalysisContent() {
   };
 
   const currentTick = ticks[symbol.toUpperCase()];
+  const currentPrice = currentTick?.price || (analysisData?.candles.slice(-1)[0]?.close ?? 100);
   const isUp = (currentTick?.change || 0) >= 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header Bar */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2">
-            <LineChart className="h-6 w-6 text-cyan-400" />
-            Technical Analysis Terminal
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-white flex items-center gap-2">
+              <LineChart className="h-6 w-6 text-cyan-400" />
+              Stock Analysis & 5m Strategy Terminal
+            </h1>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono font-bold">
+              5M CANDLE ENGINE
+            </span>
+          </div>
           <p className="text-xs text-gray-400 mt-0.5">
-            Quantitative moving averages, momentum oscillators, volatility bands, and VWAP metrics.
+            Real-time 5-minute OHLC candlestick analysis, automated 3% trigger levels, and backtesting.
           </p>
         </div>
 
@@ -86,7 +117,7 @@ function TechnicalAnalysisContent() {
 
           {/* Timeframe Tabs */}
           <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-surface-border font-mono text-xs">
-            {(["15m", "1H", "1D"] as const).map((tf) => (
+            {(["5m", "15m", "1H", "1D"] as const).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -102,52 +133,21 @@ function TechnicalAnalysisContent() {
           </div>
 
           <button
-            onClick={fetchAnalysis}
+            onClick={fetchAnalysisAndCandles}
             className="p-2 rounded-xl bg-surface border border-surface-border text-gray-400 hover:text-cyan-400 transition-colors"
+            title="Refresh chart & 5m strategy"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-cyan-400" : ""}`} />
           </button>
         </div>
       </div>
 
-      {/* Live Instrument Metric Pill */}
-      {currentTick && (
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-surface-border bg-surface">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono font-bold">
-              {symbol.substring(0, 3)}
-            </div>
-            <div>
-              <div className="text-sm font-extrabold text-white">{symbol}</div>
-              <div className="text-xs text-gray-400 font-mono">NSE Live Tick Feed</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 font-mono text-xs">
-            <div>
-              <span className="text-[10px] text-gray-400 block">LTP Price</span>
-              <span className="text-base font-extrabold text-white">
-                ₹{currentTick.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] text-gray-400 block">Day Change</span>
-              <span className={`font-bold ${isUp ? "text-bullish-text" : "text-bearish-text"}`}>
-                {isUp ? "+" : ""}
-                {currentTick.change_percent.toFixed(2)}% (₹{currentTick.change.toFixed(2)})
-              </span>
-            </div>
-
-            <div className="hidden sm:block">
-              <span className="text-[10px] text-gray-400 block">Day High / Low</span>
-              <span className="text-gray-200">
-                ₹{currentTick.high.toFixed(1)} / ₹{currentTick.low.toFixed(1)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Live 5-Minute Strategy Trigger Cards */}
+      <StrategyTriggerCards
+        symbol={symbol}
+        currentPrice={currentPrice}
+        latestCandle={latestCandle5m}
+      />
 
       {/* Indicator Toggles Bar */}
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl border border-surface-border bg-surface">
@@ -181,22 +181,106 @@ function TechnicalAnalysisContent() {
         })}
       </div>
 
-      {/* Main Interactive Candlestick Chart */}
+      {/* Main Candlestick Chart */}
       {analysisData ? (
         <InteractiveChart data={analysisData} activeIndicators={indicators} />
       ) : (
         <div className="flex items-center justify-center p-20 rounded-2xl border border-surface-border bg-surface text-gray-400 text-xs">
-          Loading technical analysis candlestick bars...
+          Loading 5-minute candlestick chart for {symbol}...
         </div>
       )}
+
+      {/* Bottom Strategy & Backtest Section Tabs */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 border-b border-surface-border pb-2">
+          <button
+            onClick={() => setActiveTab("strategy")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all ${
+              activeTab === "strategy"
+                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>5m Strategy Overview</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("signals")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all ${
+              activeTab === "signals"
+                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <History className="h-3.5 w-3.5" />
+            <span>Signal History Log</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("backtest")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all ${
+              activeTab === "backtest"
+                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Play className="h-3.5 w-3.5" />
+            <span>Strategy Backtester</span>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "strategy" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StrategySignalHistory symbol={symbol} />
+            <div className="rounded-xl border border-surface-border bg-surface p-5 space-y-4 shadow-md">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Zap className="h-4 w-4 text-cyan-400" />
+                Strategy Execution Rules
+              </h3>
+              <div className="space-y-3 text-xs text-gray-300">
+                <div className="p-3 rounded-lg bg-background/70 border border-surface-border">
+                  <div className="font-bold text-emerald-400">BUY Trigger Condition</div>
+                  <p className="text-gray-400 mt-1">
+                    Takes the reference candle's <strong className="text-gray-200">LOW</strong>. Trigger level = <code className="text-emerald-400">LOW × 1.03</code>.
+                    Generates BUY SIGNAL automatically when <code className="text-white">Price ≥ BUY_TRIGGER_PRICE</code>.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-background/70 border border-surface-border">
+                  <div className="font-bold text-rose-400">SELL Trigger Condition</div>
+                  <p className="text-gray-400 mt-1">
+                    Takes the reference candle's <strong className="text-gray-200">HIGH</strong>. Trigger level = <code className="text-rose-400">HIGH × 0.97</code>.
+                    Generates SELL SIGNAL automatically when <code className="text-white">Price ≤ SELL_TRIGGER_PRICE</code>.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-background/70 border border-surface-border">
+                  <div className="font-bold text-cyan-400">Lifecycle & Duplicate Protection</div>
+                  <p className="text-gray-400 mt-1">
+                    Triggers only evaluate finalized 5-minute candles. When a trigger is reached, it transitions from <span className="text-cyan-400">ACTIVE</span> to <span className="text-emerald-400">TRIGGERED</span> atomically, preventing duplicate signals.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "signals" && <StrategySignalHistory symbol={symbol} />}
+
+        {activeTab === "backtest" && <BacktestPanel symbol={symbol} />}
+      </div>
     </div>
   );
 }
 
 export default function TechnicalAnalysisPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-xs text-gray-400">Loading Analysis Terminal...</div>}>
-      <TechnicalAnalysisContent />
-    </Suspense>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <Suspense fallback={<div className="p-12 text-center text-xs text-gray-400">Loading Analysis Terminal...</div>}>
+        <TechnicalAnalysisContent />
+      </Suspense>
+    </div>
   );
 }

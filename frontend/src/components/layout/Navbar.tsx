@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Bell, Bookmark, LineChart, LogIn, LogOut, TrendingUp, User as UserIcon } from "lucide-react";
+import { Activity, Bell, Bookmark, Layers, LineChart, LogIn, LogOut, TrendingUp, User as UserIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useMarketSocket } from "../../context/MarketSocketContext";
 
@@ -14,10 +14,12 @@ export function Navbar() {
 
   const navLinks = [
     { name: "Dashboard", href: "/dashboard", icon: TrendingUp },
+    { name: "Index Explorer", href: "/indexes", icon: Layers },
     { name: "Alerts & Triggers", href: "/alerts", icon: Bell },
     { name: "Watchlist", href: "/watchlist", icon: Bookmark },
     { name: "Technical Analysis", href: "/analysis", icon: LineChart },
   ];
+
 
   return (
     <header className="sticky top-0 z-40 border-b border-surface-border bg-background/80 backdrop-blur-xl">

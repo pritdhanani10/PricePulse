@@ -12,13 +12,17 @@ from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
 from app.api.instruments import router as instruments_router
 from app.api.watchlists import router as watchlists_router
+from app.api.indexes import router as indexes_router
+from app.api.strategy import router as strategy_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.core.redis import redis_manager
 from app.core.security import decode_access_token
 from app.models.base import Base
 from app.models.instrument import Instrument
+from app.models.index import Index, IndexConstituent, IndexCategory
 from app.services.market_data.mock_provider import DEFAULT_MARKET_INSTRUMENTS
+from app.services.strategy_service import strategy_service
 from app.websocket.manager import ws_manager
 from app.workers.market_worker import market_worker
 
@@ -28,13 +32,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger("market_platform")
 
+# Index Category Definitions & Official Constituents
+OFFICIAL_INDEXES = {
+    IndexCategory.MIDCAP: {
+        "symbol": "NIFTY_MIDCAP_100",
+        "name": "NIFTY Midcap 100",
+        "description": "NIFTY Midcap 100 Index captures the movement of top mid-sized Indian companies.",
+        "constituents": ["DIXON", "TATAELXSI", "POLYCAB", "PERSISTENT", "COFORGE", "MPHASIS", "FEDERALBNK", "ASTRAL", "VOLTAS", "ASHOKLEY"],
+    },
+    IndexCategory.SMALLCAP: {
+        "symbol": "NIFTY_SMALLCAP_100",
+        "name": "NIFTY Smallcap 100",
+        "description": "NIFTY Smallcap 100 Index represents high-growth small-cap enterprises listed on NSE.",
+        "constituents": ["TEJASNET", "CDSL", "ANGELONE", "BSE", "CENTURYPLY", "RADICO", "KAYNES", "CYIENT", "CAMS", "SONATSOFTW"],
+    },
+    IndexCategory.MICROCAP: {
+        "symbol": "NIFTY_MICROCAP_250",
+        "name": "NIFTY Microcap 250",
+        "description": "NIFTY Microcap 250 Index tracks the performance of emerging micro-cap leaders.",
+        "constituents": ["MARKSANS", "SUBEX", "INFIBEAM", "DCMSHRIRAM", "RANEHOLDIN", "GEOJITFSL", "SAKSOFT", "NELCO", "HGINFRA", "ORIENTCEM"],
+    },
+}
+
 
 async def init_db():
-    """Create tables and seed initial Indian Market instruments if not present."""
+    """Create tables and seed initial Indian Market instruments, indexes, and strategies if not present."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
     async with AsyncSessionLocal() as session:
+        # 1. Seed Instruments
+        instrument_map = {}
         for symbol, data in DEFAULT_MARKET_INSTRUMENTS.items():
             stmt = select(Instrument).where(Instrument.symbol == symbol)
             existing = (await session.execute(stmt)).scalar_one_or_none()
@@ -50,8 +78,53 @@ async def init_db():
                     is_active=True,
                 )
                 session.add(inst)
+                instrument_map[symbol] = inst
+            else:
+                instrument_map[symbol] = existing
         await session.commit()
-    logger.info("✅ Database initialized and seeded with Indian market instruments.")
+
+        # 2. Seed Official Index Categories
+        for cat, idx_info in OFFICIAL_INDEXES.items():
+            stmt = select(Index).where(Index.category == cat)
+            existing_idx = (await session.execute(stmt)).scalar_one_or_none()
+            if not existing_idx:
+                existing_idx = Index(
+                    symbol=idx_info["symbol"],
+                    name=idx_info["name"],
+                    category=cat,
+                    exchange="NSE",
+                    description=idx_info["description"],
+                    is_active=True,
+                )
+                session.add(existing_idx)
+                await session.flush()
+
+            # Seed constituents for this index
+            for sym in idx_info["constituents"]:
+                inst_stmt = select(Instrument).where(Instrument.symbol == sym)
+                inst_obj = (await session.execute(inst_stmt)).scalar_one_or_none()
+                if inst_obj:
+                    # Check if already in index_constituents
+                    c_stmt = select(IndexConstituent).where(
+                        (IndexConstituent.index_id == existing_idx.id) &
+                        (IndexConstituent.instrument_id == inst_obj.id)
+                    )
+                    existing_const = (await session.execute(c_stmt)).scalar_one_or_none()
+                    if not existing_const:
+                        c_entry = IndexConstituent(
+                            index_id=existing_idx.id,
+                            instrument_id=inst_obj.id,
+                            weightage=round(100.0 / len(idx_info["constituents"]), 2),
+                            is_active=True,
+                        )
+                        session.add(c_entry)
+
+        await session.commit()
+        
+        # 3. Seed default Strategy
+        await strategy_service.ensure_strategy_seeded()
+
+    logger.info("✅ Database initialized and seeded with Indian market instruments, index categories & strategy.")
 
 
 @asynccontextmanager
@@ -93,6 +166,9 @@ app.include_router(instruments_router, prefix=settings.API_V1_STR)
 app.include_router(alerts_router, prefix=settings.API_V1_STR)
 app.include_router(watchlists_router, prefix=settings.API_V1_STR)
 app.include_router(analysis_router, prefix=settings.API_V1_STR)
+app.include_router(indexes_router, prefix=settings.API_V1_STR)
+app.include_router(strategy_router, prefix=settings.API_V1_STR)
+
 
 
 @app.get("/")

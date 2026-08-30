@@ -139,5 +139,10 @@ class ConnectionManager:
             except Exception:
                 asyncio.create_task(self.disconnect(ws))
 
+    async def broadcast_event(self, message: dict) -> None:
+        """Alias for broadcast_all."""
+        await self.broadcast_all(message)
+
 
 ws_manager = ConnectionManager()
+

@@ -28,11 +28,12 @@ db_module.AsyncSessionLocal = TestAsyncSessionLocal
 
 @pytest_asyncio.fixture(autouse=True)
 async def init_test_database():
-    async with db_module.engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    from app.main import init_db
+    await init_db()
     yield
     async with db_module.engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_db(request):
