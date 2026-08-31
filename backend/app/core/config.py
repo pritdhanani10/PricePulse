@@ -49,9 +49,9 @@ class Settings(BaseSettings):
 
     # Market Data & Trading Hours
     TICK_INTERVAL_SECONDS: float = 1.0
-    MARKET_DATA_PROVIDER: str = "live"  # "live" | "mock" | "zerodha" | "angel" | "dhan"
-    SIMULATE_WHEN_CLOSED: bool = False  # If False, freezes prices when real market is closed
-    RESPECT_MARKET_HOURS: bool = True  # Strictly only stream ticks during 09:15-15:30 IST Mon-Fri (NSE holidays frozen)
+    MARKET_DATA_PROVIDER: str = "live"  # "live" (Real NSE Live Feed)
+    RESPECT_MARKET_HOURS: bool = True  # Stream ticks during 09:15-15:30 IST Mon-Fri
+
 
     # Notification settings
     TELEGRAM_BOT_TOKEN: Optional[str] = None
@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     EMAILS_FROM_EMAIL: Optional[str] = "alerts@stockmarketplatform.in"
+
+    # Web Push (VAPID) Settings for Windows & Mobile Phone Device Notifications
+    VAPID_PUBLIC_KEY: str = "BFQmiNC80uKLO0wGPxNmYAmCOzuCOhW4EK5dSQ5gSuc8V0FYzfYYRpoZ27lXPeTxzaBbQDY1yrOlt3KyTfdAAME"
+    VAPID_PRIVATE_KEY: str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgPzRhMxiSBQ9W9vre\nPswu8cnLRbz9DalHYL1Cw5qFBuuhRANCAARUJojQvNLiiztMBj8TZmAJgjs7gjoV\nuBCuXUkOYErnPFdBWM32GEaaGdu5Vz3k8c2gW0A2Ncqzpbdysk33QADB\n-----END PRIVATE KEY-----"
+    VAPID_CLAIM_EMAIL: str = "mailto:alerts@pricepulse.com"
 
     model_config = SettingsConfigDict(
         env_file=".env",

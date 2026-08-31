@@ -13,7 +13,7 @@ export function IndexTicker({ ticks, onSelectSymbol }: IndexTickerProps) {
   const indexSymbols = ["NIFTY50", "BANKNIFTY", "FINNIFTY"];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
       {indexSymbols.map((symbol) => {
         const tick = ticks[symbol];
         const isUp = (tick?.change || 0) >= 0;

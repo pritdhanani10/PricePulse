@@ -7,6 +7,7 @@ from app.models.index import Index, IndexConstituent, IndexCategory
 from app.models.candle import Candle5m
 from app.models.strategy import Strategy, StrategyTrigger, StrategySignal, TriggerStatus, SignalType
 from app.models.notification import UserNotification
+from app.models.push_subscription import PushSubscription
 
 __all__ = [
     "Base",
@@ -26,5 +27,6 @@ __all__ = [
     "TriggerStatus",
     "SignalType",
     "UserNotification",
+    "PushSubscription",
 ]
 

@@ -18,8 +18,30 @@ interface InteractiveChartProps {
 }
 
 export function InteractiveChart({ data, activeIndicators }: InteractiveChartProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hoverBar, setHoverBar] = useState<any | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(800);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    };
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidth();
+    });
+    resizeObserver.observe(containerRef.current);
+
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,10 +50,11 @@ export function InteractiveChart({ data, activeIndicators }: InteractiveChartPro
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Handle high DPI
+    // Handle high DPI & responsive mobile height
     const dpr = window.devicePixelRatio || 1;
-    const width = canvas.parentElement?.clientWidth || 800;
-    const height = 550;
+    const width = containerWidth > 0 ? containerWidth : (canvas.parentElement?.clientWidth || 800);
+    const isMobile = width < 640;
+    const height = isMobile ? 400 : 540;
 
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -41,7 +64,12 @@ export function InteractiveChart({ data, activeIndicators }: InteractiveChartPro
     ctx.scale(dpr, dpr);
 
     // Layout configuration
-    const padding = { top: 20, right: 65, bottom: activeIndicators.rsi || activeIndicators.macd ? 140 : 30, left: 10 };
+    const padding = { 
+      top: 15, 
+      right: isMobile ? 50 : 65, 
+      bottom: activeIndicators.rsi || activeIndicators.macd ? (isMobile ? 110 : 130) : 25, 
+      left: isMobile ? 5 : 10 
+    };
     const chartWidth = width - padding.left - padding.right;
     const mainChartHeight = height - padding.top - padding.bottom;
 
@@ -232,7 +260,7 @@ export function InteractiveChart({ data, activeIndicators }: InteractiveChartPro
   }, [data, activeIndicators]);
 
   return (
-    <div className="relative w-full rounded-2xl border border-surface-border bg-surface p-4 shadow-2xl">
+    <div ref={containerRef} className="relative w-full rounded-2xl border border-surface-border bg-surface p-3 sm:p-4 shadow-2xl">
       {/* Legend & Stats Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-surface-border">
         <div className="flex items-center gap-3">

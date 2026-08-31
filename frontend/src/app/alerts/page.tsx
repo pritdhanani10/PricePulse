@@ -2,7 +2,20 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CheckCircle2, History, Plus, RefreshCw, ShieldAlert, Zap } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  History,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  Zap,
+  Laptop,
+  Smartphone,
+  Send,
+  Volume2,
+  AlertCircle,
+} from "lucide-react";
 import { Alert } from "../../types/alert";
 import { Instrument } from "../../types/stock";
 import { api } from "../../services/api";
@@ -13,7 +26,11 @@ import { CreateAlertModal } from "../../components/alerts/CreateAlertModal";
 
 export default function AlertsPage() {
   const { user } = useAuth();
-  const { ticks } = useMarketSocket();
+  const {
+    ticks,
+    hasNotificationPermission,
+    requestDesktopNotificationPermission,
+  } = useMarketSocket();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -86,8 +103,60 @@ export default function AlertsPage() {
         </div>
       </div>
 
+      {/* Cross-Device Notification Readiness & Test Banner */}
+      <div className="rounded-2xl border border-surface-border bg-gradient-to-r from-surface via-[#0e1420] to-surface p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-950 text-cyan-400 border border-cyan-800">
+            <Bell className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white">Universal Device Notification Delivery</span>
+              <span
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  hasNotificationPermission
+                    ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                    : "bg-amber-950 text-amber-300 border border-amber-800"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasNotificationPermission ? "bg-emerald-400" : "bg-amber-400"
+                  }`}
+                />
+                {hasNotificationPermission ? "Connected & Ready" : "Permission Needed"}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1">
+                <Laptop className="h-3 w-3 text-cyan-400" /> Windows Action Center
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Smartphone className="h-3 w-3 text-cyan-400" /> Android / iOS Phone
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Volume2 className="h-3 w-3 text-emerald-400" /> Audio Synthesizer
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          {!hasNotificationPermission && (
+            <button
+              onClick={() => requestDesktopNotificationPermission()}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition-all shrink-0"
+            >
+              Enable Notifications
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Stats Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-surface-border bg-surface p-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-950 text-cyan-400">
             <Zap className="h-5 w-5" />

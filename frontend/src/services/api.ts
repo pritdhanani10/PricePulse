@@ -76,22 +76,6 @@ class ApiClient {
     return this.request<import("../types/stock").MarketStatus>("/instruments/market/status");
   }
 
-  async getSimulationStatus() {
-    return this.request<{
-      simulation_enabled: boolean;
-      market_is_open: boolean;
-      session: string;
-      status_text: string;
-    }>("/instruments/simulation/status");
-  }
-
-  async toggleSimulation(enabled?: boolean) {
-    const url = enabled !== undefined ? `/instruments/simulation/toggle?enabled=${enabled}` : "/instruments/simulation/toggle";
-    return this.request<{ simulation_enabled: boolean; message: string }>(url, {
-      method: "POST",
-    });
-  }
-
   async getAllQuotes() {
     return this.request<import("../types/stock").MarketTick[]>("/instruments/quotes");
   }
@@ -215,18 +199,43 @@ class ApiClient {
     return this.request<import("../types/stock").AutoMonitorItemSummary[]>("/watchlists/auto-monitor/summary");
   }
 
+  // Notification Center & Web Push Management
+  async getVapidPublicKey() {
+    return this.request<{ public_key: string }>("/notifications/vapid-public-key");
+  }
+
+  async savePushSubscription(payload: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+    user_agent?: string;
+  }) {
+    return this.request<any>("/notifications/push-subscription", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deletePushSubscription(endpoint: string) {
+    return this.request<{ status: string; unregistered: boolean }>(
+      `/notifications/push-subscription?endpoint=${encodeURIComponent(endpoint)}`,
+      {
+        method: "DELETE",
+      }
+    );
+  }
+
   async getWatchlistNotifications(unreadOnly?: boolean, limit: number = 50) {
     const params = new URLSearchParams();
     if (unreadOnly) params.append("unread_only", "true");
     params.append("limit", limit.toString());
     return this.request<import("../types/auth").NotificationListResponse>(
-      `/watchlists/notifications?${params.toString()}`
+      `/notifications?${params.toString()}`
     );
   }
 
   async markNotificationRead(notificationId: string) {
     return this.request<{ status: string; message: string }>(
-      `/watchlists/notifications/${notificationId}/read`,
+      `/notifications/${notificationId}/read`,
       {
         method: "PUT",
       }
@@ -235,7 +244,7 @@ class ApiClient {
 
   async markAllNotificationsRead() {
     return this.request<{ status: string; count: number; message: string }>(
-      "/watchlists/notifications/read-all",
+      "/notifications/read-all",
       {
         method: "POST",
       }

@@ -110,7 +110,7 @@ async def test_watchlist_crud_and_auto_monitoring():
             change_percent=2.33,
             volume=60000,
             timestamp=now,
-            source="MOCK",
+            source="LIVE",
         )
         signals = await strategy_service.evaluate_tick_triggers(hit_tick)
         assert len(signals) >= 1

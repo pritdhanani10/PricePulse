@@ -43,7 +43,7 @@ export interface UserNotification {
   notification_type: string;
   title: string;
   message: string;
-  signal_type?: "BUY" | "SELL" | null;
+  signal_type?: "BUY" | "SELL" | "UP" | "DOWN" | string | null;
   trigger_price?: number | null;
   market_price?: number | null;
   reference_price?: number | null;

@@ -20,6 +20,7 @@ import { marketSocket } from "../services/websocket";
 import { useAuth } from "./AuthContext";
 import { api } from "../services/api";
 import { soundService } from "../services/sound";
+import { deviceNotificationService } from "../services/notification";
 
 export interface TriggerNotification {
   id: string;
@@ -65,6 +66,9 @@ interface MarketSocketContextType {
   createdNotifications: CreatedAlertNotification[];
   unreadNotificationCount: number;
   userNotifications: UserNotification[];
+  hasNotificationPermission: boolean;
+  isPushSubscribed: boolean;
+  permissionState: NotificationPermission;
   fetchUserNotifications: () => void;
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
@@ -89,20 +93,19 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
   const [userNotifications, setUserNotifications] = useState<UserNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0);
   const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
+  const [permissionState, setPermissionState] = useState<NotificationPermission>("default");
 
-  // Request browser desktop notification permissions
+  // Request browser desktop/mobile notification permissions & register Web Push
   const requestDesktopNotificationPermission = async (): Promise<boolean> => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "granted") {
-        setHasNotificationPermission(true);
-        return true;
-      }
-      const perm = await Notification.requestPermission();
-      const granted = perm === "granted";
-      setHasNotificationPermission(granted);
-      return granted;
+    const granted = await deviceNotificationService.requestPermission();
+    setHasNotificationPermission(granted);
+    setPermissionState(deviceNotificationService.getPermission());
+    if (granted && user) {
+      const subSuccess = await deviceNotificationService.syncPushSubscription();
+      setIsPushSubscribed(subSuccess);
     }
-    return false;
+    return granted;
   };
 
   const fetchUserNotifications = () => {
@@ -134,7 +137,7 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
     } catch (_) {}
   };
 
-  // 1. Initial snapshot fetch
+  // 1. Initial snapshot fetch and Service Worker registration
   useEffect(() => {
     api
       .getMarketStatus()
@@ -152,18 +155,27 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       })
       .catch(() => {});
 
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setHasNotificationPermission(Notification.permission === "granted");
-    }
+    // Initialize Service Worker for cross-device support
+    deviceNotificationService.initServiceWorker().catch(() => {});
+    const perm = deviceNotificationService.getPermission();
+    setPermissionState(perm);
+    setHasNotificationPermission(perm === "granted");
   }, []);
 
+  // 2. Sync Web Push subscription when user logs in
   useEffect(() => {
     if (user) {
       fetchUserNotifications();
+      if (deviceNotificationService.getPermission() === "granted") {
+        deviceNotificationService
+          .syncPushSubscription()
+          .then((success) => setIsPushSubscribed(success))
+          .catch(() => {});
+      }
     }
   }, [user]);
 
-  // 2. WebSocket listener setup
+  // 3. WebSocket listener setup
   useEffect(() => {
     marketSocket.connect(token);
 
@@ -176,7 +188,7 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
 
     const unsubscribeAlert = marketSocket.onAlert((alertData) => {
       const notif: TriggerNotification = {
-        id: Math.random().toString(36).substring(2, 9),
+        id: alertData.id || Math.random().toString(36).substring(2, 9),
         alert_id: alertData.alert_id,
         symbol: alertData.symbol,
         direction: alertData.direction,
@@ -193,19 +205,20 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
         setTriggeredNotifications((prev) => prev.filter((n) => n.id !== notif.id));
       }, 15000);
 
-      soundService.playAlertTriggerSound();
+      // Trigger cross-device system notification (Windows Action Center, Android, iOS, macOS)
+      const dirEmoji = alertData.direction === "UP" ? "🚀" : "🔻";
+      const title = `${dirEmoji} HIGH PRIORITY ALERT: ${alertData.symbol} Target Hit!`;
+      const body = `Target: ₹${alertData.target_price?.toLocaleString("en-IN")} | Live Price: ₹${alertData.trigger_price?.toLocaleString("en-IN")}`;
 
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-        try {
-          const dirEmoji = alertData.direction === "UP" ? "🚀" : "🔻";
-          const title = `${dirEmoji} HIGH PRIORITY ALERT: ${alertData.symbol} Target Hit!`;
-          const body = `Target: ₹${alertData.target_price.toLocaleString("en-IN")} | Live Price: ₹${alertData.trigger_price.toLocaleString("en-IN")}`;
-          new Notification(title, {
-            body,
-            icon: "/favicon.ico",
-            requireInteraction: true,
-          });
-        } catch (_) {}
+      deviceNotificationService.displayNotification(title, {
+        body,
+        url: "/alerts/history",
+        data: alertData,
+      });
+
+      // Refresh unread notifications
+      if (user) {
+        fetchUserNotifications();
       }
     });
 
@@ -228,25 +241,21 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       // Refresh full ledger
       fetchUserNotifications();
 
-      // Play chime
-      soundService.playAlertTriggerSound();
-
-      // Auto-dismiss after 15 seconds
+      // Auto-dismiss in-app toast after 15 seconds
       setTimeout(() => {
         setWatchlistToasts((prev) => prev.filter((t) => t.id !== toast.id));
       }, 15000);
 
-      // Desktop notification
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-        try {
-          const emoji = toast.signal_type === "BUY" ? "🟢" : "🔴";
-          new Notification(`${emoji} Watchlist ${toast.signal_type} Signal: ${toast.symbol}`, {
-            body: `Target: ₹${toast.trigger_price?.toLocaleString("en-IN") || ""} | Executed: ₹${toast.market_price?.toLocaleString("en-IN") || ""}`,
-            icon: "/favicon.ico",
-            requireInteraction: true,
-          });
-        } catch (_) {}
-      }
+      // Trigger native device notification (Windows Action Center, Android, iOS)
+      const emoji = toast.signal_type === "BUY" ? "🟢" : "🔴";
+      const title = `${emoji} Watchlist ${toast.signal_type} Signal: ${toast.symbol}`;
+      const body = `Target: ₹${toast.trigger_price?.toLocaleString("en-IN") || ""} | Executed: ₹${toast.market_price?.toLocaleString("en-IN") || ""}`;
+
+      deviceNotificationService.displayNotification(title, {
+        body,
+        url: "/watchlist",
+        data: notifData,
+      });
     });
 
     return () => {
@@ -300,6 +309,9 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
         createdNotifications,
         unreadNotificationCount,
         userNotifications,
+        hasNotificationPermission,
+        isPushSubscribed,
+        permissionState,
         fetchUserNotifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,
@@ -317,7 +329,7 @@ export function MarketSocketProvider({ children }: { children: React.ReactNode }
       {/* ========================================================================= */}
       {/* HIGH PRIORITY TOAST OVERLAY (Bottom Right Global Notifications)           */}
       {/* ========================================================================= */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none px-3">
+      <div className="fixed bottom-20 sm:bottom-5 right-0 sm:right-5 z-50 flex flex-col gap-2.5 max-w-md w-full pointer-events-none px-3">
         {/* 1. WATCHLIST AUTO-MONITOR SIGNAL TOASTS */}
         {watchlistToasts.slice(0, 3).map((w) => {
           const isBuy = w.signal_type === "BUY";

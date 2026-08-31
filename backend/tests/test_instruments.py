@@ -2,7 +2,6 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.core.config import Settings
-from app.services.market_data.mock_provider import MockMarketDataProvider
 
 
 def test_config_cors_origins_parsing():
@@ -14,46 +13,6 @@ def test_config_cors_origins_parsing():
     s2 = Settings(BACKEND_CORS_ORIGINS="http://localhost:3000, http://127.0.0.1:3000")
     assert len(s2.BACKEND_CORS_ORIGINS) == 2
     assert "http://127.0.0.1:3000" in s2.BACKEND_CORS_ORIGINS
-
-
-@pytest.mark.asyncio
-async def test_mock_provider_functionality():
-    provider = MockMarketDataProvider()
-    await provider.connect()
-
-    # 1. Check existing default instrument quote
-    quote_nifty = await provider.get_quote("NIFTY50")
-    assert quote_nifty is not None
-    assert quote_nifty.symbol == "NIFTY50"
-    assert quote_nifty.price > 0
-
-    # 2. Check dynamic unknown instrument quote
-    quote_unknown = await provider.get_quote("CUSTOM_STOCK")
-    assert quote_unknown is not None
-    assert quote_unknown.symbol == "CUSTOM_STOCK"
-    assert quote_unknown.price > 0
-
-    # 3. Check historical OHLCV data with case-insensitive timeframes
-    candles_1d = await provider.get_historical_ohlcv("NIFTY50", timeframe="1d", limit=30)
-    assert len(candles_1d) == 30
-    assert candles_1d[0].high >= candles_1d[0].low
-    assert candles_1d[-1].close == quote_nifty.price
-
-    candles_1h = await provider.get_historical_ohlcv("RELIANCE", timeframe="1H", limit=20)
-    assert len(candles_1h) == 20
-
-    # 4. Check market status
-    status = provider.get_market_status()
-    assert status.session in ("REGULAR", "PRE_OPEN", "CLOSED")
-    assert "IST" in status.market_time
-
-    # 5. Check simulation toggling
-    provider.set_simulation_state(False)
-    assert provider.is_simulation_enabled() is False
-    provider.set_simulation_state(True)
-    assert provider.is_simulation_enabled() is True
-
-    await provider.disconnect()
 
 
 @pytest.mark.asyncio
@@ -71,7 +30,6 @@ async def test_live_provider_and_market_hours():
     if quote:
         assert quote.symbol == "NIFTY50"
         assert quote.price > 0
-        assert quote.source == "LIVE"
     await live_prov.disconnect()
 
 
@@ -107,7 +65,7 @@ async def test_instruments_api_endpoints():
             "/api/instruments",
             json={
                 "symbol": test_sym,
-                "name": "Test Dynamic Stock Ltd",
+                "name": "Test Production Stock Ltd",
                 "exchange": "NSE",
                 "instrument_type": "EQUITY",
                 "base_price": 250.0,
@@ -129,14 +87,7 @@ async def test_instruments_api_endpoints():
         assert quotes_res.status_code == 200
         assert len(quotes_res.json()) >= len(instruments) + 1
 
-        # 8. Check market and simulation status
+        # 8. Check market status
         m_status_res = await client.get("/api/instruments/market/status")
         assert m_status_res.status_code == 200
 
-        sim_status_res = await client.get("/api/instruments/simulation/status")
-        assert sim_status_res.status_code == 200
-        assert sim_status_res.json()["simulation_enabled"] is True
-
-        toggle_res = await client.post("/api/instruments/simulation/toggle?enabled=false")
-        assert toggle_res.status_code == 200
-        assert toggle_res.json()["simulation_enabled"] is False

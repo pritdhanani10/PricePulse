@@ -43,6 +43,7 @@ export default function WatchlistPage() {
     fetchUserNotifications, 
     markNotificationAsRead, 
     markAllNotificationsAsRead,
+    hasNotificationPermission,
     requestDesktopNotificationPermission,
   } = useMarketSocket();
 
@@ -207,36 +208,50 @@ export default function WatchlistPage() {
         </form>
       </div>
 
-      {/* Desktop Notification Opt-in Prompt Banner */}
-      {!hasDesktopPerm && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 via-surface to-surface text-cyan-100 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 flex-shrink-0">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs font-black text-white flex items-center gap-1.5">
-                <span>Receive 24/7 Desktop Notifications For Watchlist Signals</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-900 text-cyan-300 font-mono">
-                  PUSH ALERTS
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-300 mt-0.5">
-                Enable desktop alerts so you get notified the instant a 5-minute BUY/SELL trigger is reached—even if this tab is in the background.
-              </p>
-            </div>
+      {/* Cross-Device Notification Readiness & Test Banner */}
+      <div className="rounded-2xl border border-surface-border bg-gradient-to-r from-surface via-[#0e1420] to-surface p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-950 text-cyan-400 border border-cyan-800">
+            <Bell className="h-5 w-5" />
           </div>
-          <button
-            onClick={handleRequestDesktopPermission}
-            className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold whitespace-nowrap shadow-lg shadow-cyan-600/30 transition-all hover:scale-105"
-          >
-            Enable Background Alerts
-          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white">Cross-Device Watchlist Signal Notifications</span>
+              <span
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  hasNotificationPermission
+                    ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                    : "bg-amber-950 text-amber-300 border border-amber-800"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasNotificationPermission ? "bg-emerald-400" : "bg-amber-400"
+                  }`}
+                />
+                {hasNotificationPermission ? "Windows & Phone Ready" : "Permission Needed"}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              Automated 5-minute BUY/SELL strategy breakouts are pushed to your Windows Action Center, Android, and iOS device.
+            </p>
+          </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          {!hasNotificationPermission && (
+            <button
+              onClick={handleRequestDesktopPermission}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition-all shrink-0"
+            >
+              Enable Notifications
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Stats Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-surface-border bg-surface p-4 flex items-center gap-3 shadow-lg">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-950 text-cyan-400 border border-cyan-800/50">
             <Bookmark className="h-5 w-5" />

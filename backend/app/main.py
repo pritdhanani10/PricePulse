@@ -14,14 +14,16 @@ from app.api.instruments import router as instruments_router
 from app.api.watchlists import router as watchlists_router
 from app.api.indexes import router as indexes_router
 from app.api.strategy import router as strategy_router
+from app.api.notifications import router as notifications_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.core.redis import redis_manager
 from app.core.security import decode_access_token
+import app.models  # Ensures all SQLAlchemy models (including PushSubscription, UserNotification) are registered in Base.metadata
 from app.models.base import Base
 from app.models.instrument import Instrument
 from app.models.index import Index, IndexConstituent, IndexCategory
-from app.services.market_data.mock_provider import DEFAULT_MARKET_INSTRUMENTS
+from app.core.constants import DEFAULT_MARKET_INSTRUMENTS
 from app.services.strategy_service import strategy_service
 from app.websocket.manager import ws_manager
 from app.workers.market_worker import market_worker
@@ -180,6 +182,7 @@ app.include_router(watchlists_router, prefix=settings.API_V1_STR)
 app.include_router(analysis_router, prefix=settings.API_V1_STR)
 app.include_router(indexes_router, prefix=settings.API_V1_STR)
 app.include_router(strategy_router, prefix=settings.API_V1_STR)
+app.include_router(notifications_router, prefix=settings.API_V1_STR)
 
 
 

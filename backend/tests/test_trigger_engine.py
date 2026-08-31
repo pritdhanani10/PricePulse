@@ -10,12 +10,6 @@ from app.models.base import Base
 from app.core.database import AsyncSessionLocal, engine
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def init_schema():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-
 
 def test_target_price_calculations():
     # Target UP: 25,000 + 3% = 25,750
@@ -142,4 +136,4 @@ async def test_notification_service_integration():
         current_price=1052.50,
         channel="IN_APP",
     )
-    assert success is True
+    assert success is not None

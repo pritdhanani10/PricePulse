@@ -192,13 +192,13 @@ function TechnicalAnalysisContent() {
 
       {/* Bottom Strategy & Backtest Section Tabs */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 border-b border-surface-border pb-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-surface-border pb-2">
           <button
             onClick={() => setActiveTab("strategy")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all ${
               activeTab === "strategy"
                 ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                : "text-gray-400 hover:text-white"
+                : "text-gray-400 hover:text-white bg-surface-light/40"
             }`}
           >
             <Zap className="h-3.5 w-3.5" />

@@ -33,8 +33,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-[75vh] items-center justify-center">
-      <div className="w-full max-w-md rounded-2xl border border-surface-border bg-surface p-8 shadow-2xl">
+    <div className="flex min-h-[75vh] items-center justify-center p-2 sm:p-0">
+      <div className="w-full max-w-md rounded-2xl border border-surface-border bg-surface p-5 sm:p-8 shadow-2xl">
         <div className="text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-950 border border-cyan-800 text-cyan-400 mb-3">
             <Activity className="h-6 w-6" />

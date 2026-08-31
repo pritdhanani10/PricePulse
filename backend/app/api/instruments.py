@@ -9,7 +9,7 @@ from app.models.instrument import Instrument
 from app.schemas.instrument import InstrumentCreate, InstrumentQuote, InstrumentResponse
 from app.schemas.market import MarketStatus, OHLCVBar
 from app.services.market_data.factory import get_market_data_provider
-from app.services.market_data.mock_provider import DEFAULT_MARKET_INSTRUMENTS
+from app.core.constants import DEFAULT_MARKET_INSTRUMENTS
 
 router = APIRouter(prefix="/instruments", tags=["Instruments"])
 
@@ -76,36 +76,6 @@ async def get_market_status():
     provider = get_market_data_provider()
     return provider.get_market_status()
 
-
-@router.get("/simulation/status")
-async def get_simulation_status():
-    """Get current simulation state."""
-    provider = get_market_data_provider()
-    m_status = provider.get_market_status()
-    enabled = getattr(provider, "is_simulation_enabled", lambda: True)()
-    return {
-        "simulation_enabled": enabled,
-        "market_is_open": m_status.is_open,
-        "session": m_status.session,
-        "status_text": m_status.status_text,
-    }
-
-
-@router.post("/simulation/toggle")
-async def toggle_simulation(
-    enabled: Optional[bool] = Query(None, description="Set True to simulate live ticks, False to freeze prices"),
-):
-    """Toggle simulation mode on or off."""
-    provider = get_market_data_provider()
-    if hasattr(provider, "set_simulation_state"):
-        current = provider.is_simulation_enabled()
-        new_state = (not current) if enabled is None else enabled
-        result = provider.set_simulation_state(new_state)
-        return {
-            "simulation_enabled": result,
-            "message": "Live price simulation enabled" if result else "Live price simulation paused (prices frozen)",
-        }
-    return {"simulation_enabled": True, "message": "Simulation control not supported by current provider"}
 
 
 @router.get("/quotes", response_model=List[InstrumentQuote])
